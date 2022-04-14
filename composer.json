@@ -1,0 +1,12 @@
+{
+    "name": "fiks/mure-discord",
+    "autoload": {
+        "psr-4": {
+            "Fiks\\MureDiscord\\": "src/"
+        }
+    },
+    "require": {
+        "team-reflex/discord-php": "^7.0",
+        "monolog/monolog": "^2.4"
+    }
+}
