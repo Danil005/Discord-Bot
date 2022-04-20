@@ -7,6 +7,7 @@
     },
     "require": {
         "team-reflex/discord-php": "^7.0",
-        "monolog/monolog": "^2.4"
+        "monolog/monolog": "^2.4",
+        "ica4c/albion-online-api-client": "^2.4"
     }
 }

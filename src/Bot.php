@@ -7,7 +7,6 @@ use Discord\Exceptions\IntentException;
 use Discord\Parts\Channel\Message;
 use Discord\WebSockets\Event;
 use Discord\WebSockets\Intents;
-use http\Exception;
 use Monolog\Handler\StreamHandler;
 use Monolog\Logger;
 use Monolog\Logger as Monolog;
@@ -137,19 +136,75 @@ class Bot
      */
     private function findCommand(string $event, array $commands): ?array
     {
-        $commands = $commands[$event];
+        # Получаем команды по событию
+        if(isset($commands[$event])) {
+            $commands = $commands[$event];
+        } else {
+            return [];
+        }
 
+        # Удаляем префикс
         $message = str_replace($this->config['PREFIX'], '', $this->message->content);
 
+        # Ищем саму команду
         foreach ($commands as $command) {
-            $commandWithoutArgs = preg_replace('/\{[^)]+\}/m', '', $command['command']);
+            # Убираем аргументы, которые были переданы
+            $commandWithoutArgs = trim(preg_replace('/\{[^)]+\}/m', '', $command['command']));
+            preg_match_all('/(?<=\{)([\s\S]+?)(?=\})/m', $command['command'], $args);
 
-            if($commandWithoutArgs == $message) {
-                return $command;
+            # Если есть совпадение, возвращаем команду
+            if($commandWithoutArgs == trim(explode(' ', $message)[0])) {
+                return [
+                    /**
+                     * Command:
+                     * Array(
+                     *   "command": string,
+                     *   "class": new Class
+                     *   "event": const
+                     * )
+                     */
+                    'command' => $command,
+                    # Аргументы, которые есть в команде
+                    'args' => $args,
+                    # Само сообщение
+                    'message' => $message,
+                    # Команда без аргументов для удаления
+                    'commandWithoutArgs' => $commandWithoutArgs,
+                ];
             }
         }
 
         return null;
+    }
+
+    /**
+     * Получить аргументы и передать в класс
+     *
+     * @param array|null $data
+     * @return array|int
+     */
+    private function createArgs(array $data = null): array|int
+    {
+        if(!$data)
+            return [];
+
+        # Получаем все слова, которые прислал нам пользователь
+        $message = explode(' ', trim(str_replace($data['commandWithoutArgs'], '', $data['message'])));
+        # Массив с аргументами, где ключ - переменная из Route, а значение - переданные от пользователя
+        $args = array_flip($data['args'][0]);
+
+        $i = 0;
+        foreach ($args as $key => $value) {
+            if(!isset($message[$i])) {
+                $this->message->reply('Простите, но команда неверная. Вы указали не все аргументы. Команда: **!' . $data['command']['command'] . '**');
+                return -1;
+            }
+
+            $args[$key] = $message[$i];
+            $i++;
+        }
+
+        return $args;
     }
 
 
@@ -168,31 +223,57 @@ class Bot
         $this->discord->on('ready', function (Discord $discord) use ($commands) {
             $this->log->info('Bot enabled and ready');
 
+            /**
+             * Сообщения, которые приходят
+             */
             $discord->on(Event::MESSAGE_CREATE, function (Message $message, Discord $discord) use ($commands) {
                 $this->message = $message;
-                $this->findCommand(Event::MESSAGE_CREATE, $commands);
+                $command = $this->findCommand(Event::MESSAGE_CREATE, $commands);
+
+                $args = (array)$this->createArgs($command);
+                $class = isset($command) ? (string) $command['command']['class'] : '';
+
+                if($class) {
+                    $cmd = new $class($message, $discord, $args, $this->log);
+                    $cmd->run();
+                }
             });
 
+            /**
+             * Сообщения, которые удаляют
+             */
             $discord->on(Event::MESSAGE_DELETE, function (Message $message, Discord $discord) use ($commands) {
                 $this->message = $message;
                 $this->findCommand(Event::MESSAGE_DELETE, $commands);
             });
 
+            /**
+             * Сообщения, на которые вешают реакцию
+             */
             $discord->on(Event::MESSAGE_REACTION_ADD, function (Message $message, Discord $discord) use ($commands) {
                 $this->message = $message;
                 $this->findCommand(Event::MESSAGE_REACTION_ADD, $commands);
             });
 
+            /**
+             * Сообщения, с которых убирают реакции
+             */
             $discord->on(Event::MESSAGE_REACTION_REMOVE, function (Message $message, Discord $discord) use ($commands) {
                 $this->message = $message;
                 $this->findCommand(Event::MESSAGE_REACTION_REMOVE, $commands);
             });
 
+            /**
+             * Сообщения, которые обновляют
+             */
             $discord->on(Event::MESSAGE_UPDATE, function (Message $message, Discord $discord) use ($commands) {
                 $this->message = $message;
                 $this->findCommand(Event::MESSAGE_UPDATE, $commands);
             });
 
+            /**
+             * Сообщения, с которых удаляют все эмоции
+             */
             $discord->on(Event::MESSAGE_REACTION_REMOVE_ALL, function (Message $message, Discord $discord) use ($commands) {
                 $this->message = $message;
                 $this->findCommand(Event::MESSAGE_REACTION_REMOVE_ALL, $commands);

@@ -11,6 +11,6 @@ class PingCommand extends Commands
 
     public function run()
     {
-
+        $this->message->reply('Pong!');
     }
 }

@@ -6,7 +6,7 @@ use Fiks\MureDiscord\Route;
  *  Команды, которые реагируют на пришедшие сообщения
  */
 Route::namespaces('Fiks\\MureDiscord\\Commands\\MessageCreate', function() {
-    Route::addCommand('register', 'RegisterCommand');
+    Route::addCommand('register {username}', 'RegisterCommand');
     Route::addCommand('ping', 'PingCommand');
 });
 
